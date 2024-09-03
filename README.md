@@ -27,3 +27,15 @@ Com o nome do módulo definido no comando go mod init nome_do_modulo. Esse coman
 - go build
 - ./gohello
 
+### Autenticador do http server
+
+Github: https://github.com/abbot/go-http-auth
+
+no terminal digitar: 
+```bash
+go get github.com/abbot/go-http-auth
+```
+
+Password Hash Generator
+Link: https://unix4lyfe.org/crypt/
+
