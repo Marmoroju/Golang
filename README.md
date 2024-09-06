@@ -39,3 +39,10 @@ go get github.com/abbot/go-http-auth
 Password Hash Generator
 Link: https://unix4lyfe.org/crypt/
 
+### Monitoria URL com CSV
+
+passagem de parâmetros para execução do código
+```bash
+go run main.go lista-servidores.csv downtime.csv
+```
+

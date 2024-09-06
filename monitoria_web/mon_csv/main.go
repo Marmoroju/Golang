@@ -13,55 +13,86 @@ type Server struct {
 	serverURL     string
 	tempoExecucao float64
 	status        int
+	dataFalha     string
 }
 
-func criarListaServidores(data [][]string) []Server { // função retorna lista de servidores
+func criarListaServidores(serverList *os.File) []Server { // função retorna lista de servidores
+	csvReader := csv.NewReader(serverList)
+	data, err := csvReader.ReadAll()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	var servidores []Server
 	for i, line := range data { //line = segundo vetor
 		if i > 0 {
 			servidor := Server{ // novo objeto da struct Server
-				serverName: line[0], //indica a linha 0 do arquivo csv, isto é, primeira coluna, Server.
-				serverURL:  line[1], //indica a linha 0 do arquivo csv, isto é, segunda coluna, URL.
+				serverName: line[0],
+				serverURL:  line[1],
 			}
-			servidores = append(servidores, servidor) // servidores, adiciona a primeira iteração do laço for
+			servidores = append(servidores, servidor) // servidores: adiciona ao final, a primeira iteração do laço for
 		}
 	}
 	return servidores //retorna lista de servidores ao final da iteração
 
 }
 
-func checkServer(servidores []Server) {
+// Verifica e retorna o status dos servidores. Status esperado é sempre o 200
+func checkServer(servidores []Server) []Server {
+	var downServers []Server //slice
+
 	for _, servidor := range servidores {
 		agora := time.Now()                      //tempo
 		get, err := http.Get(servidor.serverURL) //acesso a URL, através do objeto criado
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Server %s is down [%s]\n", servidor.serverName, err.Error())
+			servidor.status = 0
+			servidor.dataFalha = agora.Format("02/01/2006 15:04:05")
+			downServers = append(downServers, servidor)
+			continue
 		}
 		servidor.status = get.StatusCode
+		if servidor.status != 200 {
+			servidor.dataFalha = agora.Format("02/01/2006 15:04:05")
+			downServers = append(downServers, servidor)
+		}
 		servidor.tempoExecucao = time.Since(agora).Seconds()
 		fmt.Printf("URL: [%s] Status: [%d] Tempo de carga: [%f]\n", servidor.serverURL, servidor.status, servidor.tempoExecucao)
-		//fmt.Println(servidor)
 	}
+	return downServers //retorno do slice
 }
 
-// verifica se o serviço está responsivo e tempo de resposta
-// utilizando uma lista csv
-func main() {
-
-	f, err := os.Open(os.Args[1]) //primeiro precisa fazer a leitura do arquivo
-	if err != nil {               //err se der erro será impresso o erro
+// Faz a leitura do arquivo csv de servidores
+// e cria um outro arquivo csv com o retorno
+func openFiles(serverListFile string, downtimeFile string) (*os.File, *os.File) {
+	serverList, err := os.OpenFile(serverListFile, os.O_RDONLY, 0666)
+	if err != nil {
 		fmt.Println(err)
-		os.Exit(1) //Sai do programa Exit(1)
-	}
-	defer f.Close() //fechar o arquivo quando a função for concluida
-
-	csvReader := csv.NewReader(f)    // será passada para a variável o arquivo lido
-	data, err := csvReader.ReadAll() // para ler todo o arquivo, não só a primeira linha
-	if err != nil {                  //err se der erro será impresso o erro
-		fmt.Println(err) //Sai do programa Exit(1)
 		os.Exit(1)
 	}
-	servidores := criarListaServidores(data)
-	checkServer(servidores)
+	downtimeList, err := os.OpenFile(downtimeFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	return serverList, downtimeList
+}
 
+func generateDowntime(downtimeList *os.File, downServers []Server) {
+	csvWriter := csv.NewWriter(downtimeList)
+	for _, servidor := range downServers {
+		line := []string{servidor.serverName, servidor.serverURL, servidor.dataFalha, fmt.Sprintf("%f", servidor.tempoExecucao), fmt.Sprintf("%d", servidor.status)}
+		csvWriter.Write(line)
+	}
+	csvWriter.Flush() //quando a função terminar, se der erro, ele passa todos os dados em memória para o arquivo. Assim não perde o histórico.
+}
+
+func main() {
+	serverList, downtimeList := openFiles(os.Args[1], os.Args[2])
+	defer serverList.Close()
+	defer downtimeList.Close()
+	servidores := criarListaServidores(serverList)
+	downServers := checkServer(servidores)
+	generateDowntime(downtimeList, downServers)
 }

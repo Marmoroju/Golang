@@ -2,3 +2,5 @@ server,url
 Google,https://www.google.com
 HSJA,https://www.hsja.com.br
 Go,https://go.dev
+FailedServer,http://www.go.devopsser.com
+Server404,http://go.dev/devops
